@@ -226,7 +226,7 @@ class ExSheet extends StatelessWidget {
 
   const ExSheet({super.key, required this.store, required this.ex, this.onDelete});
 
-  static const labels = {'w': 'Weight (kg)', 'r': 'Reps', 't': 'Time', 'km': 'Distance (km)'};
+  static const labels = {'w': 'Weight (kg)', 'r': 'Reps', 't': 'Time', 'km': 'Distance (km)', 'pl': 'Plates'};
 
   @override
   Widget build(BuildContext context) {
@@ -235,6 +235,11 @@ class ExSheet extends StatelessWidget {
     final target = TextEditingController(text: '${ex['reps']}');
     final ms = msv(ex).toSet();
     var u = unit(ex);
+    final pcfg = store.plateCfg('${ex['n']}');
+    var plateOn = pcfg != null;
+    final plateC = TextEditingController(text: '${(pcfg?['p'] as num?) ?? 20}');
+    final barC = TextEditingController(text: '${(pcfg?['b'] as num?) ?? 20}');
+    var side = pcfg?['side'] != false;
     final tt = Theme.of(context).textTheme;
     return StatefulBuilder(
       builder: (_, setSheet) => Padding(
@@ -259,6 +264,7 @@ class ExSheet extends StatelessWidget {
                 controlAffinity: ListTileControlAffinity.leading,
                 value: ms.contains(m.key),
                 title: Text(m.value),
+                subtitle: m.key == 'pl' ? const Text('Count only — no kg conversion') : null,
                 onChanged: (v) => setSheet(() => v! ? ms.add(m.key) : ms.remove(m.key)),
               ),
             if (ms.contains('t'))
@@ -267,6 +273,41 @@ class ExSheet extends StatelessWidget {
                 selected: {u},
                 onSelectionChanged: (v) => setSheet(() => u = v.first),
               ),
+            if (ms.contains('w')) ...[
+              CheckboxListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                value: plateOn,
+                title: const Text('Plate counter'),
+                subtitle: const Text('Enter weight as plates — kg is still logged'),
+                onChanged: (v) => setSheet(() => plateOn = v!),
+              ),
+              if (plateOn) ...[
+                Row(children: [
+                  Expanded(
+                      child: TextField(
+                          controller: plateC,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(labelText: 'Plate (kg)'))),
+                  const SizedBox(width: 8),
+                  Expanded(
+                      child: TextField(
+                          controller: barC,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(labelText: 'Bar (kg)'))),
+                ]),
+                const SizedBox(height: 8),
+                SegmentedButton<bool>(
+                  segments: const [
+                    ButtonSegment(value: true, label: Text('Per side')),
+                    ButtonSegment(value: false, label: Text('Total')),
+                  ],
+                  selected: {side},
+                  onSelectionChanged: (v) => setSheet(() => side = v.first),
+                ),
+              ],
+            ],
             const SizedBox(height: 12),
             Row(children: [
               FilledButton.icon(
@@ -275,9 +316,16 @@ class ExSheet extends StatelessWidget {
                   if (n.isNotEmpty) ex['n'] = n;
                   ex['sets'] = int.tryParse(sets.text) ?? ex['sets'];
                   ex['reps'] = num.tryParse(target.text) ?? ex['reps'];
-                  ex['ms'] = ['w', 'r', 't', 'km'].where(ms.contains).toList();
+                  ex['ms'] = ['w', 'r', 't', 'km', 'pl'].where(ms.contains).toList();
                   if ((ex['ms'] as List).isEmpty) ex['ms'] = ['r'];
                   if (ms.contains('t')) ex['u'] = u;
+                  if (ms.contains('w') && plateOn) {
+                    final p = num.tryParse(plateC.text) ?? 20;
+                    final b = num.tryParse(barC.text) ?? 20;
+                    store.setPlates('${ex['n']}', p: p > 0 ? p : 20, b: b >= 0 ? b : 20, side: side);
+                  } else {
+                    store.clearPlates('${ex['n']}');
+                  }
                   store.save();
                   Navigator.pop(context);
                 },

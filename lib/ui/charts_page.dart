@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../format.dart';
 import '../plan.dart';
 import '../store.dart';
 import 'chart.dart';
@@ -52,6 +53,7 @@ Map<String, (String, List<Pt>)> seriesFor(List log, String name) {
       if (ms.contains('km')) {
         add('km', 'km', sets.fold<double>(0, (a, x) => a + (x['km'] as num).toDouble()));
       }
+      if (ms.contains('pl')) add('pl', 'plates', mx('pl'));
     }
   }
   return out;
@@ -81,6 +83,7 @@ class _ChartsPageState extends State<ChartsPage> {
     'vol': ('Best set volume', Icons.local_fire_department_rounded),
     't': ('Longest set', Icons.timer_rounded),
     'km': ('Distance per session', Icons.route_rounded),
+    'pl': ('Top plates', Icons.album_rounded),
   };
 
   @override
@@ -127,18 +130,21 @@ class _ChartsPageState extends State<ChartsPage> {
     final cc = chartCols(context);
     final series = seriesFor(log, name);
 
-    final metricOrder = ['w', 'r', 'vol', 't', 'km'];
-    final exerciseCharts = <Widget>[
-      for (var m = 0; m < metricOrder.length; m++)
-        if (series[metricOrder[m]] != null)
-          ChartCard(
-            title: meta[metricOrder[m]]!.$1,
-            unit: series[metricOrder[m]]!.$1,
-            icon: meta[metricOrder[m]]!.$2,
-            color: cc[m],
-            pts: series[metricOrder[m]]!.$2,
-          ),
-    ];
+    final um = widget.store.unitMode;
+    final metricOrder = ['w', 'r', 'vol', 't', 'km', 'pl'];
+    final exerciseCharts = <Widget>[];
+    for (var m = 0; m < metricOrder.length; m++) {
+      final raw = series[metricOrder[m]];
+      if (raw == null) continue;
+      final isW = metricOrder[m] == 'w' || metricOrder[m] == 'vol';
+      exerciseCharts.add(ChartCard(
+        title: meta[metricOrder[m]]!.$1,
+        unit: isW ? um : raw.$1,
+        icon: meta[metricOrder[m]]!.$2,
+        color: cc[m],
+        pts: isW ? [for (final p in raw.$2) Pt(p.t, dispW(p.y, um))] : raw.$2,
+      ));
+    }
 
     final sessionMin = [
       for (final l in log)
@@ -197,10 +203,12 @@ class _ChartsPageState extends State<ChartsPage> {
         delay: 80,
         child: BarCard(
           title: 'Weekly volume',
-          unit: 'kg',
+          unit: um,
           icon: Icons.bar_chart_rounded,
           color: cc[0],
-          bars: weekly(log, (l) => ((l['vol'] as num?) ?? 0).toDouble()),
+          bars: [
+            for (final b in weekly(log, (l) => ((l['vol'] as num?) ?? 0).toDouble())) Pt(b.t, dispW(b.y, um))
+          ],
         ),
       ),
       const SizedBox(height: 10),
@@ -242,13 +250,13 @@ class _ChartsPageState extends State<ChartsPage> {
           delay: 320,
           child: ChartCard(
             title: 'Body weight',
-            unit: 'kg',
+            unit: um,
             icon: Icons.monitor_weight_rounded,
             color: cc[5],
             sub: 'daily weigh-ins',
             pts: [
               for (final e in widget.store.wt)
-                Pt(DateTime.fromMillisecondsSinceEpoch(e['t'] as int), (e['w'] as num).toDouble())
+                Pt(DateTime.fromMillisecondsSinceEpoch(e['t'] as int), dispW((e['w'] as num).toDouble(), um))
             ],
           ),
         ),

@@ -57,6 +57,7 @@ class _MePageState extends State<MePage> {
     final scheme = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     final cc = chartCols(context);
+    final um = st.unitMode;
     final w = st.lastWeight;
     final water = st.waterToday(), goal = st.waterGoal;
     final wpts = [
@@ -90,11 +91,11 @@ class _MePageState extends State<MePage> {
                     style: tt.bodySmall?.copyWith(color: scheme.onSurfaceVariant))
               else ...[
                 Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                  Text(fmtN(w), style: tt.displaySmall),
+                  Text(fmtW(w, um), style: tt.displaySmall),
                   const SizedBox(width: 5),
                   Padding(
                       padding: const EdgeInsets.only(bottom: 7),
-                      child: Text('kg', style: TextStyle(color: scheme.onSurfaceVariant))),
+                      child: Text(um, style: TextStyle(color: scheme.onSurfaceVariant))),
                   if (wpts.length > 1)
                     Builder(builder: (_) {
                       final d = w - wpts[wpts.length - 2].y;
@@ -110,7 +111,7 @@ class _MePageState extends State<MePage> {
                               size: 17,
                               color: scheme.onSurfaceVariant),
                           const SizedBox(width: 3),
-                          Text('${d >= 0 ? '+' : ''}${fmtN(d)} kg',
+                          Text('${d >= 0 ? '+' : ''}${fmtW(d, um)} $um',
                               style: tt.bodySmall?.copyWith(color: scheme.onSurfaceVariant)),
                         ]),
                       );
@@ -126,9 +127,9 @@ class _MePageState extends State<MePage> {
                   onPressed: () => _ask(
                       st.weighedToday ? "Update today's weight" : 'Log weight',
                       'Weight',
-                      'kg',
-                      w != null ? fmtN(w) : '',
-                      (v) => st.logWeight(v)),
+                      um,
+                      w != null ? fmtW(w, um) : '',
+                      (v) => st.logWeight(toKg(v, um))),
                   icon: const Icon(Icons.scale_rounded),
                   label: Text(st.weighedToday ? "Update today's weight" : 'Log weight'),
                 ),
@@ -143,10 +144,10 @@ class _MePageState extends State<MePage> {
           delay: 120,
           child: ChartCard(
             title: 'Body weight',
-            unit: 'kg',
+            unit: um,
             icon: Icons.monitor_weight_rounded,
             color: cc[5],
-            pts: wpts,
+            pts: [for (final p in wpts) Pt(p.t, dispW(p.y, um))],
             sub: 'daily weigh-ins',
           ),
         ),
@@ -229,6 +230,53 @@ class _MePageState extends State<MePage> {
           ),
         ),
       ],
+
+      // Preferences
+      const SizedBox(height: 10),
+      SlideIn(
+        delay: 240,
+        child: Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Icon(Icons.tune_rounded, color: cc[3], size: 22),
+                const SizedBox(width: 8),
+                Text('Preferences', style: tt.titleMedium),
+              ]),
+              ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.timer_rounded, color: cc[3]),
+                title: const Text('Rest timer'),
+                trailing: TextButton(
+                  onPressed: () => _ask('Rest timer', 'Rest length', 's', '${st.restSec}',
+                      (v) => st.setRestSec(v.toInt())),
+                  child: Text('${st.restSec}s'),
+                ),
+              ),
+              ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.straighten_rounded, color: cc[2]),
+                title: const Text('Weight units'),
+                trailing: SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment(value: 'kg', label: Text('kg')),
+                    ButtonSegment(value: 'lb', label: Text('lb')),
+                  ],
+                  selected: {um},
+                  onSelectionChanged: (v) {
+                    st.setCfg('unit', v.first);
+                    setState(() {});
+                    widget.onChanged();
+                  },
+                ),
+              ),
+            ]),
+          ),
+        ),
+      ),
 
       // Appearance
       const SizedBox(height: 10),

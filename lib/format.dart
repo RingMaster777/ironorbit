@@ -13,3 +13,12 @@ String clock(int ms) {
 }
 
 int nowMs() => DateTime.now().millisecondsSinceEpoch;
+
+const lbPerKg = 2.20462;
+
+/// Weights are stored in kg; these convert for display in the active unit
+/// ('kg' or 'lb'). lb display rounds to whole units.
+double dispW(num kg, String u) => u == 'lb' ? kg * lbPerKg : kg.toDouble();
+String fmtW(num kg, String u) => u == 'lb' ? '${(kg * lbPerKg).round()}' : fmtN(kg);
+num toKg(num shown, String u) => u == 'lb' ? shown / lbPerKg : shown;
+num parseW(String s, String u) => toKg(num.tryParse(s) ?? 0, u);

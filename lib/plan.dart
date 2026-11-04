@@ -35,7 +35,8 @@ Cycling 3x10m''';
 /// tracks kg × reps; a trailing s/m switches to time ("Plank 3x45s",
 /// "Treadmill 3x10m", "Treadmill 20m" for one long set). Any combination is
 /// spelled out in brackets: "Burpees 3x20 [r, ts]" = reps + seconds,
-/// "Treadmill 3x10 [tm, km]" = minutes + km. Tokens: w, r, t, ts, tm, km.
+/// "Treadmill 3x10 [tm, km]" = minutes + km, "Leg Press 3x8 [pl, r]" logs
+/// the raw plate count alongside reps. Tokens: w, r, t, ts, tm, km, pl.
 /// JSON also works: [{"name":"Chest","ex":[{"n":"Bench","sets":4,"reps":8,
 /// "ms":["w","r"]},{"n":"Plank","sets":3,"reps":45,"ms":["t"],"u":"s"}]}]
 List<Map> parse(String t) {
@@ -83,7 +84,7 @@ List<Map> parse(String t) {
   return days.where((d) => (d['ex'] as List).isNotEmpty).toList();
 }
 
-const _tokens = {'w': 'w', 'kg': 'w', 'r': 'r', 'reps': 'r', 't': 't', 'ts': 't', 'tm': 't', 'km': 'km'};
+const _tokens = {'w': 'w', 'kg': 'w', 'r': 'r', 'reps': 'r', 't': 't', 'ts': 't', 'tm': 't', 'km': 'km', 'pl': 'pl', 'plates': 'pl'};
 
 /// Builds one exercise map. [su] is the s/m suffix (if any), [br] an explicit
 /// bracket token list like "[r, ts]" which wins when both are present.
@@ -107,7 +108,7 @@ Map exOf(String n, int sets, int target, String? su, String? br) {
     'n': n,
     'sets': sets,
     'reps': target,
-    'ms': ['w', 'r', 't', 'km'].where(ms.contains).toList(),
+    'ms': ['w', 'r', 't', 'km', 'pl'].where(ms.contains).toList(),
     'u': u,
   };
 }
@@ -137,11 +138,28 @@ String metricLabel(Map e, String k) => switch (k) {
       'w' => 'kg',
       'r' => 'reps',
       't' => unit(e) == 'm' ? 'min' : 'sec',
+      'pl' => 'plates',
       _ => 'km',
     };
 
 /// Emoji for an exercise based on what it tracks.
 String exIcon(Map e) => msv(e).any((k) => k == 'w' || k == 'r') ? '🏋️' : '⏱️';
+
+/// Plate math: kg for [n] plates under a plate config ({p, b, side}).
+/// Per side (default) doubles the plates — 3 plates on a 20kg bar with 20kg
+/// plates = 140kg; side=false counts each plate once (machine stacks).
+num platesKg(Map cfg, int n) {
+  final p = (cfg['p'] as num?) ?? 20, b = (cfg['b'] as num?) ?? 20;
+  return b + (cfg['side'] == false ? 1 : 2) * p * n;
+}
+
+/// Nearest plate count for a kg value (used to seed the stepper from
+/// previously typed weights).
+int kgToPlates(Map cfg, num kg) {
+  final p = (cfg['p'] as num?) ?? 20, b = (cfg['b'] as num?) ?? 20;
+  final per = (cfg['side'] == false ? 1 : 2) * p;
+  return (((kg - b) / per).round()).clamp(0, 99);
+}
 
 void migrate(Map s) {
   for (final d in (s['plan'] as List?) ?? []) {
@@ -167,7 +185,7 @@ void fixSets(Map e) {
   final ms = msv(e);
   for (final x in (e['sets'] as List?) ?? []) {
     if (ms.contains('t') && !ms.contains('r') && x['r'] != null && x['t'] == null) x['t'] = x['r'];
-    for (final k in ['w', 'r', 't', 'km']) {
+    for (final k in ['w', 'r', 't', 'km', 'pl']) {
       if (!ms.contains(k)) x.remove(k);
     }
   }
@@ -189,23 +207,25 @@ String planDesc(Map e) {
   var s = e['sets'] == 1 && ms.length == 1 && ms.first == 't'
       ? '${e['reps']}${unit(e)}'
       : '${e['sets']} × ${e['reps']}${ms.contains('t') && !ms.contains('r') ? unit(e) : ''}';
+  if (ms.length == 1 && ms.first == 'pl') s += ' plates';
   if (ms.contains('t') && ms.contains('r')) s += ' · +time';
   if (ms.contains('km')) s += ' · +km';
+  if (ms.contains('pl') && ms.length > 1) s += ' · +plates';
   return s;
 }
 
-String setDesc(Map e, Map x) => msv(e)
+String setDesc(Map e, Map x, [String wu = 'kg']) => msv(e)
     .map((k) {
-      if (k == 'w') return (x['w'] as num) > 0 ? '${fmtN(x['w'])}kg' : '';
+      if (k == 'w') return (x['w'] as num) > 0 ? '${fmtW(x['w'], wu)}$wu' : '';
       if (k == 't') return '${fmtN(x['t'])}${unit(e)}';
-      return '${fmtN(x[k])}${k == 'km' ? 'km' : ''}';
+      return '${fmtN(x[k])}${k == 'km' ? 'km' : k == 'pl' ? ' plates' : ''}';
     })
     .where((s) => s.isNotEmpty)
     .join(' × ');
 
-String logTag(Map l) {
+String logTag(Map l, [String wu = 'kg']) {
   final v = (l['vol'] as num?) ?? 0, t = (l['tsec'] as num?) ?? 0, km = (l['km'] as num?) ?? 0;
-  if (v > 0) return '${v.round()} kg';
+  if (v > 0) return '${fmtW(v, wu)} $wu';
   if (km > 0) return '${fmtN(km)} km';
   if (t >= 60) return '${fmtN(t / 60)} min';
   return '';

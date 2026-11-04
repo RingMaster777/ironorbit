@@ -17,6 +17,7 @@ class HistoryPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final log = store.log;
     final tt = Theme.of(context).textTheme;
+    final um = store.unitMode;
     const wd = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     final now = DateTime.now();
     final cells = <Widget>[];
@@ -58,13 +59,16 @@ class HistoryPage extends StatelessWidget {
               final d = DateTime.fromMillisecondsSinceEpoch(l['t']);
               return '${wd[d.weekday - 1]} ${d.day}/${d.month}';
             }()),
-            trailing: Text('${math.max(1, (l['dur'] as int) ~/ 60000)} min\n${logTag(l)}', textAlign: TextAlign.right, style: tt.bodySmall),
+            trailing: Text(
+                '${math.max(1, (l['dur'] as int) ~/ 60000)} min\n${logTag(l, um)}${((l['prs'] as List?) ?? const []).isNotEmpty ? ' 🏆' : ''}',
+                textAlign: TextAlign.right,
+                style: tt.bodySmall),
             children: [
               for (final e in l['ex'])
                 ListTile(
                   dense: true,
                   title: Text(e['n']),
-                  subtitle: Text((e['sets'] as List).map((x) => setDesc(e, x)).join(' · ')),
+                  subtitle: Text((e['sets'] as List).map((x) => setDesc(e, x, um)).join(' · ')),
                 ),
             ],
           ),

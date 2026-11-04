@@ -28,8 +28,33 @@ class Store {
   String get mode => (cfg['mode'] as String?) ?? 'system';
   int get waterGoal => ((cfg['water'] as num?) ?? 2500).toInt().clamp(1, 100000);
 
+  /// Display unit for weights ('kg' or 'lb'); storage is always kg.
+  String get unitMode => (cfg['unit'] as String?) ?? 'kg';
+
+  int get restSec => ((cfg['rest'] as num?) ?? 90).toInt().clamp(15, 600);
+
+  void setRestSec(int s) => setCfg('rest', s.clamp(15, 600));
+
   void setCfg(String k, dynamic v) {
     cfg[k] = v;
+    save();
+  }
+
+  /// Plate-entry config per exercise name: {'p': plate kg, 'b': bar kg,
+  /// 'side': count per side (barbell) or as total (machine stack)}. Stored
+  /// outside the plan so it survives plan text edits; weight itself is
+  /// always logged in kg — plates are just the entry mode.
+  Map get plates => s['plates'] ??= {};
+
+  Map? plateCfg(String n) => plates[n] as Map?;
+
+  void setPlates(String n, {required num p, required num b, required bool side}) {
+    plates[n] = {'p': p.toDouble(), 'b': b.toDouble(), 'side': side};
+    save();
+  }
+
+  void clearPlates(String n) {
+    plates.remove(n);
     save();
   }
 
@@ -125,6 +150,27 @@ class Store {
         if (ms.contains('km')) km += (x['km'] as num);
       }
     }
+    // PRs: per exercise and metric, the best set beating every past session.
+    final prev = <String, double>{};
+    for (final pl in log) {
+      for (final e in pl['ex']) {
+        for (final k in msv(e)) {
+          final b = (e['sets'] as List)
+              .fold<double>(0, (m, x) => math.max(m, ((x[k] as num?) ?? 0).toDouble()));
+          final key = '${e['n']}|$k';
+          if (b > (prev[key] ?? 0)) prev[key] = b;
+        }
+      }
+    }
+    final prs = <Map>[];
+    for (final e in ex) {
+      for (final k in msv(e)) {
+        final v = (e['sets'] as List)
+            .fold<double>(0, (m, x) => math.max(m, ((x[k] as num?) ?? 0).toDouble()));
+        final p = prev['${e['n']}|$k'];
+        if (p != null && p > 0 && v > p) prs.add({'n': e['n'], 'k': k, 'v': v, 'prev': p, 'u': e['u']});
+      }
+    }
     final l = {
       't': nowMs(),
       'day': a['day'],
@@ -133,6 +179,7 @@ class Store {
       'vol': vol,
       'tsec': tsec,
       'km': km,
+      'prs': prs,
       'ex': ex,
     };
     log.add(l);
@@ -181,6 +228,37 @@ class Store {
   void cancel() {
     s['act'] = null;
     save();
+  }
+
+  /// Rest countdown lives in the active workout, so it survives restarts and
+  /// dies with the session.
+  void startRest() {
+    if (act == null) return;
+    act!['rest'] = {'end': nowMs() + restSec * 1000, 'len': restSec};
+    save();
+  }
+
+  void bumpRest(int sec) {
+    final r = act?['rest'];
+    if (r == null) return;
+    r['end'] = math.max(nowMs() + 1000, (r['end'] as int) + sec * 1000);
+    save();
+  }
+
+  void clearRest() {
+    if (act == null) return;
+    act!['rest'] = null;
+    save();
+  }
+
+  /// Replaces all state with a parsed backup. Returns false when it is not
+  /// a valid IronOrbit backup.
+  bool restore(Map b) {
+    if (b['plan'] is! List || b['log'] is! List) return false;
+    s = b;
+    migrate(s);
+    save();
+    return true;
   }
 
   /// Body weight, one entry per day, chronological: [{t, w}].
