@@ -272,7 +272,7 @@ class _HomeState extends State<Home> with SingleTickerProviderStateMixin {
         onReorderDay: reorder,
       ),
       ChartsPage(store: st),
-      HistoryPage(store: st),
+      HistoryPage(store: st, onChanged: () => setState(() {})),
       MePage(store: st, onChanged: widget.onCfgChanged),
     ];
     return Scaffold(

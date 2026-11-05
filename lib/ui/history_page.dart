@@ -5,13 +5,18 @@ import 'package:flutter/material.dart';
 import 'package:ironorbit/format.dart';
 import 'package:ironorbit/plan.dart';
 import 'package:ironorbit/store.dart';
+import 'session_editor.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
 /// History tab: 5-week activity grid, totals and past sessions.
 class HistoryPage extends StatelessWidget {
   final Store store;
-  const HistoryPage({super.key, required this.store});
+  final VoidCallback onChanged;
+  const HistoryPage({super.key, required this.store, required this.onChanged});
+
+  Future<void> _edit(BuildContext context, {Map? entry}) =>
+      showSessionEditor(context, store, entry: entry).then((_) => onChanged());
 
   @override
   Widget build(BuildContext context) {
@@ -47,6 +52,16 @@ class HistoryPage extends StatelessWidget {
       GridView.count(crossAxisCount: 7, shrinkWrap: true, mainAxisSpacing: 6, crossAxisSpacing: 6, physics: const NeverScrollableScrollPhysics(), children: cells),
       const SizedBox(height: 8),
       Row(children: [Stat('${log.length}', 'workouts'), Stat('$mins', 'total min'), Stat('${store.streak()}', 'streak')]),
+      const SizedBox(height: 4),
+      SizedBox(
+        width: double.infinity,
+        child: OutlinedButton.icon(
+          onPressed: () => _edit(context),
+          icon: const Icon(Icons.history_edu_rounded, size: 18),
+          label: const Text('Log a past workout'),
+        ),
+      ),
+      const SizedBox(height: 12),
       Text('Sessions', style: tt.titleLarge),
       if (log.isEmpty)
         const Padding(padding: EdgeInsets.all(24), child: Center(child: Text('No workouts yet.\nFinish your first session and it shows up here.', textAlign: TextAlign.center))),
@@ -70,6 +85,17 @@ class HistoryPage extends StatelessWidget {
                   title: Text(e['n']),
                   subtitle: Text((e['sets'] as List).map((x) => setDesc(e, x, um)).join(' · ')),
                 ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: () => _edit(context, entry: l),
+                    icon: const Icon(Icons.edit_outlined, size: 16),
+                    label: const Text('Edit'),
+                  ),
+                ),
+              ),
             ],
           ),
         ),

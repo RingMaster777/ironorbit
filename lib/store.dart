@@ -124,23 +124,11 @@ class Store {
     save();
   }
 
-  /// Finishes the active workout, appends the log entry and advances the
-  /// rotation. Returns the entry, or null when no set was ticked done.
-  Map? finish() {
-    final a = act!;
-    final ex = (a['ex'] as List)
-        .map((e) => {
-              'n': e['n'],
-              'ms': e['ms'],
-              'u': e['u'],
-              'sets': (e['sets'] as List)
-                  .where((x) => x['d'] == 1)
-                  .map((x) => {for (final k in msv(e)) k: x[k]})
-                  .toList(),
-            })
-        .toList();
-    final n = ex.fold<int>(0, (t, e) => t + (e['sets'] as List).length);
-    if (n == 0) return null;
+  /// Builds a log entry from [ex] (metric-shaped sets, no 'd' flags) at time
+  /// [t], computing volume/time/distance totals and PRs against only
+  /// entries that happened strictly before [t] — correct whether [t] is
+  /// "now" (a live finish) or a backdated/edited timestamp.
+  Map _buildEntry({required int day, required int t, required int dur, required List ex}) {
     double vol = 0, tsec = 0, km = 0;
     for (final e in ex) {
       final ms = msv(e);
@@ -150,9 +138,10 @@ class Store {
         if (ms.contains('km')) km += (x['km'] as num);
       }
     }
-    // PRs: per exercise and metric, the best set beating every past session.
+    // PRs: per exercise and metric, the best set beating every earlier session.
     final prev = <String, double>{};
     for (final pl in log) {
+      if ((pl['t'] as int) >= t) continue;
       for (final e in pl['ex']) {
         for (final k in msv(e)) {
           final b = (e['sets'] as List)
@@ -171,22 +160,73 @@ class Store {
         if (p != null && p > 0 && v > p) prs.add({'n': e['n'], 'k': k, 'v': v, 'prev': p, 'u': e['u']});
       }
     }
-    final l = {
-      't': nowMs(),
-      'day': a['day'],
-      'name': plan[a['day']]['name'],
-      'dur': nowMs() - (a['start'] as int),
+    return {
+      't': t,
+      'day': day,
+      'name': plan[day]['name'],
+      'dur': dur,
       'vol': vol,
       'tsec': tsec,
       'km': km,
       'prs': prs,
       'ex': ex,
     };
+  }
+
+  void _insertSorted(Map l) {
     log.add(l);
+    log.sort((a, b) => (a['t'] as int).compareTo(b['t'] as int));
+  }
+
+  /// Finishes the active workout, appends the log entry and advances the
+  /// rotation. Returns the entry, or null when no set was ticked done.
+  Map? finish() {
+    final a = act!;
+    final ex = (a['ex'] as List)
+        .map((e) => {
+              'n': e['n'],
+              'ms': e['ms'],
+              'u': e['u'],
+              'sets': (e['sets'] as List)
+                  .where((x) => x['d'] == 1)
+                  .map((x) => {for (final k in msv(e)) k: x[k]})
+                  .toList(),
+            })
+        .toList();
+    final n = ex.fold<int>(0, (t, e) => t + (e['sets'] as List).length);
+    if (n == 0) return null;
+    final l = _buildEntry(day: a['day'], t: nowMs(), dur: nowMs() - (a['start'] as int), ex: ex);
+    _insertSorted(l);
     s['next'] = ((a['day'] as int) + 1) % plan.length;
     s['act'] = null;
     save();
     return l;
+  }
+
+  /// Logs a workout for a date in the past — for when you forgot to open
+  /// the app that day. Doesn't touch the rotation, since it isn't "today's"
+  /// workout completing. [date]'s time-of-day is ignored (pinned to noon).
+  Map logBackdated({required int day, required DateTime date, required List ex, required int durMin}) {
+    final t = DateTime(date.year, date.month, date.day, 12).millisecondsSinceEpoch;
+    final l = _buildEntry(day: day, t: t, dur: durMin * 60000, ex: ex);
+    _insertSorted(l);
+    save();
+    return l;
+  }
+
+  /// Replaces an existing log entry's date/exercises/duration in place and
+  /// recomputes its totals/PRs. [entry] must be a reference already in [log].
+  void editLog(Map entry, {required DateTime date, required List ex, required int durMin}) {
+    final t = DateTime(date.year, date.month, date.day, 12).millisecondsSinceEpoch;
+    log.remove(entry);
+    final l = _buildEntry(day: (entry['day'] as num).toInt(), t: t, dur: durMin * 60000, ex: ex);
+    _insertSorted(l);
+    save();
+  }
+
+  void deleteLog(Map entry) {
+    log.remove(entry);
+    save();
   }
 
   /// Applies a freshly parsed plan, keeping "next up" on the same day name
