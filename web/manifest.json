@@ -1,11 +1,11 @@
 {
-    "name": "ironorbit",
-    "short_name": "ironorbit",
+    "name": "IronOrbit",
+    "short_name": "IronOrbit",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#372945",
+    "theme_color": "#FF9F1C",
+    "description": "Rotation-based workout tracker with plan upload.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

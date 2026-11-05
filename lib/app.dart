@@ -10,7 +10,6 @@ import 'package:flutter/services.dart';
 import 'package:ironorbit/format.dart';
 import 'package:ironorbit/plan.dart';
 import 'package:ironorbit/store.dart';
-import 'package:ironorbit/sysio.dart';
 import 'package:ironorbit/ui/charts_page.dart';
 import 'package:ironorbit/ui/history_page.dart';
 import 'package:ironorbit/ui/me_page.dart';
@@ -149,10 +148,10 @@ class _HomeState extends State<Home> with SingleTickerProviderStateMixin {
   }
 
   Future<void> pick() async {
-    final r = await FilePicker.platform.pickFiles(
-        type: FileType.custom, allowedExtensions: ['txt', 'csv', 'json'], withData: true);
-    if (r == null || r.files.first.bytes == null) return;
-    pc.text = utf8.decode(r.files.first.bytes!, allowMalformed: true);
+    final files =
+        await FilePicker.pickFiles(type: FileType.custom, allowedExtensions: ['txt', 'csv', 'json']);
+    if (files.isEmpty) return;
+    pc.text = utf8.decode(await files.first.readAsBytes(), allowMalformed: true);
     apply();
   }
 
@@ -171,24 +170,24 @@ class _HomeState extends State<Home> with SingleTickerProviderStateMixin {
   }
 
   /// Exports the entire state (plan, log, weight, water, settings) as
-  /// pretty-printed JSON. Web downloads it; native writes the picked path.
+  /// pretty-printed JSON. file_picker writes the bytes itself on every
+  /// platform (web triggers a browser download) — nothing left for us to
+  /// write manually once saveFile returns a non-null location.
   Future<void> exportData() async {
     final data = const JsonEncoder.withIndent('  ').convert(st.s);
-    final path = await FilePicker.platform
-        .saveFile(fileName: 'ironorbit-backup-${dk(nowMs())}.json', bytes: utf8.encode(data));
-    if (path == null) return;
-    if (kIsWeb) return snack('Backup downloaded');
-    snack(await writeFile(path, data) ? 'Backup saved' : 'Could not write backup');
+    final uri = await FilePicker.saveFile(
+        fileName: 'ironorbit-backup-${dk(nowMs())}.json', bytes: utf8.encode(data));
+    if (uri == null) return;
+    snack(kIsWeb ? 'Backup downloaded' : 'Backup saved');
   }
 
   /// Picks a backup file, validates it, then asks before overwriting.
   Future<void> pickBackup() async {
-    final r = await FilePicker.platform.pickFiles(
-        type: FileType.custom, allowedExtensions: ['json'], withData: true);
-    if (r == null || r.files.first.bytes == null) return;
+    final files = await FilePicker.pickFiles(type: FileType.custom, allowedExtensions: ['json']);
+    if (files.isEmpty) return;
     Map b;
     try {
-      final j = jsonDecode(utf8.decode(r.files.first.bytes!, allowMalformed: true));
+      final j = jsonDecode(utf8.decode(await files.first.readAsBytes(), allowMalformed: true));
       if (j is! Map) throw const FormatException('not an object');
       b = Map<String, dynamic>.from(j);
     } catch (_) {
@@ -279,7 +278,10 @@ class _HomeState extends State<Home> with SingleTickerProviderStateMixin {
     return Scaffold(
       appBar: AppBar(
         title: Row(children: [
-          RotationTransition(turns: orb, child: Icon(Icons.loop, color: accent)),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.asset('assets/logo/ironorbit_logo.png', width: 30, height: 30),
+          ),
           const SizedBox(width: 10),
           const Text('IronOrbit'),
         ]),

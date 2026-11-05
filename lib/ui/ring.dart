@@ -57,10 +57,21 @@ class DayRing extends StatelessWidget {
               ),
             ),
             Center(
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                Text('Day ${next + 1} of $n', style: tt.bodySmall),
-                Text(plan[next]['name'], style: tt.headlineSmall),
-              ]),
+              child: SizedBox(
+                // Keeps long day names (e.g. "Shoulder and Traps") inside the
+                // ring's own border instead of overflowing past its stroke.
+                width: r * 2 - 40,
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  Text('Day ${next + 1} of $n', style: tt.bodySmall, textAlign: TextAlign.center),
+                  Text(
+                    plan[next]['name'],
+                    style: tt.headlineSmall,
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ]),
+              ),
             ),
           ];
           for (var i = 0; i < n; i++) {

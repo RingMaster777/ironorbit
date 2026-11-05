@@ -103,12 +103,9 @@ class _ChartsPageState extends State<ChartsPage> {
                   curve: Curves.elasticOut,
                   builder: (_, v, __) => Transform.scale(
                     scale: v,
-                    child: Container(
-                      width: 84,
-                      height: 84,
-                      decoration: BoxDecoration(
-                          shape: BoxShape.circle, color: chartCols(context)[0].withOpacity(.15)),
-                      child: Icon(Icons.insights_rounded, size: 44, color: chartCols(context)[0]),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(22),
+                      child: Image.asset('assets/logo/ironorbit_logo.png', width: 84, height: 84),
                     ),
                   ),
                 ),
